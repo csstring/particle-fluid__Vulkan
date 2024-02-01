@@ -1,0 +1,59 @@
+#version 460
+
+layout(set = 0, binding = 0) uniform sampler3D densityTex;
+layout(set = 0, binding = 1, r32f) uniform image3D lightingTex;
+
+layout(push_constant) uniform Params {
+  vec3 uvwOffset;
+  float lightAbsorptionCoeff;
+  vec3 lightDir;
+  float densityAbsorption ;
+  vec3 lightColor;
+  float aniso;
+} params;
+
+float BeerLambert(float absorptionCoefficient, float distanceTraveled)
+{
+    return exp(-abs(absorptionCoefficient * distanceTraveled));
+}
+
+vec3 GetUVW(vec3 posModel)
+{
+    return (posModel + 1.0) * 0.5;
+}
+
+float LightRay(vec3 posModel, vec3 lightDir)
+{
+    int numSteps = 128 / 4;
+    float stepSize = 2.0 / float(numSteps);
+
+    float alpha = 1.0;
+
+    for (int i = 0; i < numSteps; ++i)
+    {
+        float density = texture(densityTex, GetUVW(posModel)).r;
+
+        if (density > 1e-3)
+            alpha *= BeerLambert(params.lightAbsorptionCoeff * density, stepSize);
+
+        posModel += lightDir * stepSize;
+
+        if (any(greaterThan(abs(posModel), vec3(1))))
+            break;
+
+        if (alpha < 1e-3)
+            break;
+    }
+    return alpha;
+}
+
+layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+
+void main() {
+    ivec3 size = imageSize(lightingTex);
+    ivec3 dtID = ivec3(gl_GlobalInvocationID.xyz);
+    vec3 uvw = (vec3(dtID) + 0.5) / vec3(size);
+    
+    float alpha = LightRay((uvw - 0.5) * 2.0, params.lightDir);
+    imageStore(lightingTex, dtID, vec4(alpha,0,0,0));
+}
