@@ -1,0 +1,30 @@
+#version 460
+
+layout(set = 0, binding = 0, rgba32f) uniform image2D velocity;
+layout(set = 0, binding = 1, rgba32f) uniform image2D density;
+layout(set = 0, binding = 2) uniform sampler2D velocitySampleLinear;
+layout(set = 0, binding = 3) uniform sampler2D densitySampleLinear;
+layout(set = 0, binding = 4) uniform sampler2D velocitySampleNear;
+
+layout(push_constant) uniform Params {
+  vec4 sourcingVelocity;
+  vec4 sourcingDensity;
+  vec4 cursorPos;
+  float viscosity;
+  float dt;
+} params;
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+void main() {
+    ivec2 dtID = ivec2(gl_GlobalInvocationID.xy);
+    vec2 textureSize = imageSize(velocity); // Assuming velocity and densityTemp have the same size
+    vec2 dx = vec2(1.0f/ textureSize.x, 1.0f/ textureSize.y);
+    vec2 pos = (vec2(dtID) + vec2(0.5f, 0.5f)) * dx;
+    vec2 vel = texture(velocitySampleNear, pos).xy;
+    // vec2 vel = vec2(1.0f, 0.0f);
+    vec2 posBack = pos - vel * params.dt;
+
+    imageStore(velocity, dtID, texture(velocitySampleLinear, posBack));
+    imageStore(density, dtID, texture(densitySampleLinear, posBack));
+}

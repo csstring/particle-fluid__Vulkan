@@ -1,0 +1,31 @@
+#version 460
+
+layout(set = 0, binding = 0, rgba32f) uniform image2D velocity;
+layout(set = 0, binding = 1, rgba32f) uniform image2D vorticity;
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+
+void main() {
+    ivec2 dtID = ivec2(gl_GlobalInvocationID.xy);
+    int width = imageSize(velocity).x;
+    int height = imageSize(velocity).y;
+    vec2 dx = vec2(1.0f / width, 1.0f / height);
+
+    // Confine Vorticity
+
+    float left = abs(imageLoad(vorticity, ivec2(dtID.x == 0 ? width - 1 : dtID.x - 1, dtID.y)).x);
+    float right = abs(imageLoad(vorticity, ivec2(dtID.x == width - 1 ? 0 : dtID.x + 1, dtID.y)).x);
+    float up = abs(imageLoad(vorticity, ivec2(dtID.x, dtID.y == height - 1 ? 0 : dtID.y + 1)).x);
+    float down = abs(imageLoad(vorticity, ivec2(dtID.x, dtID.y == 0 ? height - 1 : dtID.y - 1)).x);
+
+    vec2 eta = vec2((right - left) / (2.0f * dx.x), -(up - down) / (2.0f * dx.y));
+    if (length(eta) < 1e-5) {
+        return;
+    }
+    vec3 psi = vec3(normalize(eta).xy, 0.0f);
+    vec3 omega = vec3(0.0f, 0.0f, imageLoad(vorticity, dtID).x);
+
+    vec4 res = vec4(0.5f * cross(psi, omega).xy * dx, 0.0f, 0.0f);
+    imageStore(velocity, dtID, imageLoad(velocity, dtID) + res);
+}

@@ -1,0 +1,37 @@
+#version 460
+
+layout(set = 0, binding = 0, rgba32f) uniform image2D velocity;
+layout(set = 0, binding = 1, rgba32f) uniform image2D density;
+
+layout(push_constant) uniform Params {
+  vec4 sourcingVelocity;
+  vec4 sourcingDensity;
+  vec4 cursorPos;
+  float viscosity;
+  float dt;
+} params;
+
+float smootherstep(float edge0, float edge1, float x) {
+    x = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+    return x * x * x * (x * (x * 6 - 15) + 10);
+}
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+void main() {
+    ivec2 dtID = ivec2(gl_GlobalInvocationID.xy);
+    vec2 textureSize = imageSize(velocity);
+    imageStore(density, dtID, max(vec4(0.0f),imageLoad(density, dtID) - 0.001f)); 
+
+    if (params.cursorPos.x <= 0 || params.cursorPos.x >= textureSize.x-1 || params.cursorPos.y <= 0 || params.cursorPos.y >= textureSize.y-1){
+        return;
+    }
+
+    float radius = 20.0;
+    if (params.cursorPos.w == 1.0) {
+        float dist = length(vec2(dtID) - vec2(params.cursorPos.x, params.cursorPos.y)) / radius;
+        float scale = smootherstep(0.0, 1.0, 1.0 - dist);
+        imageStore(velocity, dtID, params.sourcingVelocity * scale + imageLoad(velocity, dtID));
+        imageStore(density, dtID, params.sourcingDensity * scale + imageLoad(density, dtID));
+    }
+}

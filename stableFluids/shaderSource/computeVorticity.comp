@@ -1,0 +1,22 @@
+#version 460
+
+layout(set = 0, binding = 0, rgba32f) uniform image2D velocity;
+layout(set = 0, binding = 1, rgba32f) uniform image2D vorticity;
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+void main() {
+    ivec2 dtID = ivec2(gl_GlobalInvocationID.xy);
+    int width = imageSize(velocity).x;
+    int height = imageSize(velocity).y;
+    vec2 dx = vec2(1.0f / width, 1.0f / height);
+
+    float vLeft = imageLoad(velocity, ivec2(dtID.x == 0 ? width - 1 : dtID.x - 1, dtID.y)).y;
+    float vRight = imageLoad(velocity, ivec2(dtID.x == width - 1 ? 0 : dtID.x + 1, dtID.y)).y;
+    float vUp = imageLoad(velocity, ivec2(dtID.x, dtID.y == height - 1 ? 0 : dtID.y + 1)).x;
+    float vDown = imageLoad(velocity, ivec2(dtID.x, dtID.y == 0 ? height - 1 : dtID.y - 1)).x;
+
+    // Compute Vorticity
+    vec4 vel = vec4((vRight - vLeft) / (2.0f * dx.x) - (vUp - vDown) / (2.0f * dx.y), 0.0f, 0.0f, 0.0f);
+    imageStore(vorticity, dtID, vel);
+}

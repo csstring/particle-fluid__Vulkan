@@ -1,0 +1,26 @@
+#version 460
+
+layout(set = 0, binding = 0, rgba32f) uniform image2D velocity;
+layout(set = 0, binding = 1, rgba32f) uniform image2D divergence;
+layout(set = 0, binding = 2, rgba32f) uniform image2D pressure;
+layout(set = 0, binding = 3, rgba32f) uniform image2D pressureTemp;
+
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+void main() {
+    ivec2 dtID = ivec2(gl_GlobalInvocationID.xy);
+    int width = imageSize(velocity).x;
+    int height = imageSize(velocity).y;
+
+    float left = imageLoad(velocity, ivec2(dtID.x == 0 ? width - 1 : dtID.x - 1, dtID.y)).x;
+    float right = imageLoad(velocity, ivec2(dtID.x == width - 1 ? 0 : dtID.x + 1, dtID.y)).x;
+    float up = imageLoad(velocity, ivec2(dtID.x, dtID.y == height - 1 ? 0 : dtID.y + 1)).y;
+    float down = imageLoad(velocity, ivec2(dtID.x, dtID.y == 0 ? height - 1 : dtID.y - 1)).y;
+
+    vec4 div = vec4(0.5f * (right - left + up - down), 0.0f, 0.0f,0.0f);
+
+    imageStore(divergence, dtID, div);
+    imageStore(pressure, dtID, vec4(0.0f));
+    imageStore(pressureTemp, dtID, vec4(0.0f));
+}

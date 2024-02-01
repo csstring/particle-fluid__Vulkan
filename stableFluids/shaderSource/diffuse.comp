@@ -1,0 +1,43 @@
+#version 460
+
+
+layout(set = 0, binding = 0, rgba32f) uniform image2D velocity;
+layout(set = 0, binding = 1, rgba32f) uniform image2D density;
+layout(set = 0, binding = 2, rgba32f) uniform image2D velocityTemp;
+layout(set = 0, binding = 3, rgba32f) uniform image2D densityTemp;
+
+layout(push_constant) uniform Params {
+  vec4 sourcingVelocity;
+  vec4 sourcingDensity;
+  vec4 cursorPos;
+  float viscosity;
+  float dt;
+} params;
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+void main() {
+    ivec2 dtID = ivec2(gl_GlobalInvocationID.xy);
+    int width = imageSize(velocityTemp).x;
+    int height = imageSize(velocityTemp).y;
+
+    vec4 vLeft = imageLoad(velocityTemp, ivec2(dtID.x == 0 ? width - 1 : dtID.x - 1, dtID.y));
+    vec4 vRight = imageLoad(velocityTemp, ivec2(dtID.x == width - 1 ? 0 : dtID.x + 1, dtID.y));
+    vec4 vUp = imageLoad(velocityTemp, ivec2(dtID.x, dtID.y == height - 1 ? 0 : dtID.y + 1));
+    vec4 vDown = imageLoad(velocityTemp, ivec2(dtID.x, dtID.y == 0 ? height - 1 : dtID.y - 1));
+    vec4 vCurrent = imageLoad(velocityTemp, dtID);
+
+
+    vec4 velocityColor = (vCurrent + params.dt * params.viscosity * (vLeft + vRight + vUp + vDown)) / (1.0f + 4.0f * params.viscosity * params.dt); 
+    imageStore(velocity, dtID, velocityColor);
+
+    vec4 dLeft = imageLoad(densityTemp, ivec2(dtID.x == 0 ? width - 1 : dtID.x - 1, dtID.y));
+    vec4 dRight = imageLoad(densityTemp, ivec2(dtID.x == width - 1 ? 0 : dtID.x + 1, dtID.y));
+    vec4 dUp = imageLoad(densityTemp, ivec2(dtID.x, dtID.y == height - 1 ? 0 : dtID.y + 1));
+    vec4 dDown = imageLoad(densityTemp, ivec2(dtID.x, dtID.y == 0 ? height - 1 : dtID.y - 1));
+    vec4 dCurrent = imageLoad(densityTemp, dtID);
+
+
+    vec4 densityColor = (dCurrent + params.dt * params.viscosity * (dLeft + dRight + dUp + dDown)) / (1.0f + 4.0f * params.viscosity * params.dt); 
+    imageStore(density, dtID, densityColor);
+}
