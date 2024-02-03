@@ -35,7 +35,7 @@ void Camera::initialize(void)
     _isOn = false;
     _clickOn = false;
     _cameraPos = glm::vec3(0, 0 ,-2.0);
-    _cameraUp = glm::vec3(0,-1,0);
+    _cameraUp = glm::vec3(0,1,0);
     _cameraFront = glm::vec3(0,0,1);
     _worldUp = _cameraUp;
     _zFar = 50;
@@ -91,7 +91,7 @@ void Camera::mouse_callback(double xposIn, double yposIn)
     }
 
     float xoffset = xpos - _camera._lastX;
-    float yoffset = _camera._lastY - ypos;
+    float yoffset = ypos - _camera._lastY;
 
     _camera._lastX = xpos;
     _camera._lastY = ypos;

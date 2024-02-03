@@ -20,6 +20,7 @@
 #include "SDL_Event.hpp"
 #include "ParticleScene.hpp"
 #include "StableFluidsScene.hpp"
+#include "Cloud.hpp"
 
 void VulkanEngine::init()
 {
@@ -57,11 +58,11 @@ void VulkanEngine::init()
 	fluidScene->init_image_buffer();
 	init_descriptors();
   init_pipelines();
-	// load_images();
-  // load_meshes();
-  init_scene();
 	init_imgui();
 	_isInitialized = true;
+	cloudScene = new CloudScene();
+	cloudScene->initialize(this);
+  init_scene();
 }
 
 void VulkanEngine::init_vulkan()
@@ -157,8 +158,8 @@ void VulkanEngine::init_swapchain()
 	//allocate and create the image
 	vmaCreateImage(_allocator, &dimg_info, &dimg_allocinfo, &_depthImage._image, &_depthImage._allocation, nullptr);
 
-	//build an image-view for the depth image to use for rendering
-	VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_depthFormat, _depthImage._image, VK_IMAGE_ASPECT_DEPTH_BIT);
+	_depthImage._imageExtent = depthImageExtent;
+	VkImageViewCreateInfo dview_info = vkinit::imageview_create_info(_depthFormat, _depthImage, VK_IMAGE_ASPECT_DEPTH_BIT);
 
 	VK_CHECK(vkCreateImageView(_device, &dview_info, nullptr, &_depthImageView));
 
@@ -342,7 +343,15 @@ void VulkanEngine::init_descriptors()
 	_sceneParameterBuffer = create_buffer(SceneParamBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 	const size_t cameraBufferSize = FRAME_OVERLAP * pad_uniform_buffer_size(sizeof(GPUCameraData));
 	_cameraBuffer = create_buffer(cameraBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+	
 	for (int i =0; i < FRAME_OVERLAP; ++i){
+		const int max_object = 10000;
+		_frames[i].objectBuffer = create_buffer(sizeof(GPUObjectData)*max_object, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+		VkDescriptorBufferInfo objectBufferInfo;
+		objectBufferInfo.buffer = _frames[i].objectBuffer._buffer;
+		objectBufferInfo.offset = 0;
+		objectBufferInfo.range = sizeof(GPUObjectData) * max_object;
 
 		VkDescriptorBufferInfo cameraInfo;
 		cameraInfo.buffer = _cameraBuffer._buffer;
@@ -359,6 +368,13 @@ void VulkanEngine::init_descriptors()
 											bind_buffer(1, &sceneInfo, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT).
 											build(_frames[i].globalDescriptor, _globalSetLayout);
 
+		vkutil::DescriptorBuilder::begin(_descriptorLayoutCache, _descriptorAllocator).
+											bind_buffer(0, &objectBufferInfo, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT).
+											build(_frames[i].objectDescriptor, _objectSetLayout);
+
+		_mainDeletionQueue.push_function([=]() {
+			vmaDestroyBuffer(_allocator, _frames[i].objectBuffer._buffer, _frames[i].objectBuffer._allocation);
+		});
 	}
 	_mainDeletionQueue.push_function([=]() {
 			vmaDestroyBuffer(_allocator, _cameraBuffer._buffer, _cameraBuffer._allocation);
@@ -398,11 +414,11 @@ void VulkanEngine::run()
 
 		ImGui::End();
 		// particleScene->update(0, _frameNumber % 2);
-		fluidScene->update(0, _frameNumber % 2);
+		// fluidScene->update(0, _frameNumber % 2);
+		// cloudScene->update(1./120., _frameNumber % 2);
 		draw();
 	}
 }
-
 //------------------draw-------------
 
 void VulkanEngine::draw()
@@ -447,7 +463,7 @@ void VulkanEngine::draw()
 	//connect clear values
 	rpInfo.clearValueCount = 2;
 	rpInfo.pClearValues = clearValues;
-
+	cloudScene->update(1./120., _frameNumber % 2);
 	ImGui::Render();
 	vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -504,6 +520,7 @@ void VulkanEngine::cleanup()
 		}
 		delete particleScene;
 		delete fluidScene;
+		delete cloudScene;
     _mainDeletionQueue.flush();
 		_descriptorLayoutCache->cleanup();
 		_descriptorAllocator->cleanup();
@@ -520,17 +537,7 @@ void VulkanEngine::cleanup()
 
 void VulkanEngine::load_meshes()
 { 
-	//we don't care about the vertex normals
-	Mesh lostEmpire{};
-	lostEmpire.load_from_obj("./assets/lost_empire.obj");
-  _monkeyMesh.load_from_obj("/Users/schoe/Desktop/vulkanTutorial/vulkanTutorial/assets/monkey_smooth.obj");
-	upload_mesh(_triangleMesh);
-  upload_mesh(_monkeyMesh);
-	upload_mesh(lostEmpire);
 
-	_meshes["empire"] = lostEmpire;
-  _meshes["monkey"] = _monkeyMesh;
-  _meshes["triangle"] = _triangleMesh;
 }
 
 void VulkanEngine::upload_mesh(Mesh& mesh)
@@ -588,13 +595,17 @@ void VulkanEngine::upload_mesh(Mesh& mesh)
 	vmaDestroyBuffer(_allocator, stagingBuffer._buffer, stagingBuffer._allocation);
 }
 
-Material* VulkanEngine::create_material(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name, uint32_t layoutCount, VkDescriptorSet descriptorSet)
+Material* VulkanEngine::create_material(VkPipeline pipeline, VkPipelineLayout layout, 
+const std::string& name, uint32_t layoutCount, VkDescriptorSet descriptorSet, 
+uint32_t constantSize, void* constantPtr)
 {
 	Material mat;
 	mat.setLayoutCount = layoutCount;
 	mat.textureSet = descriptorSet;
 	mat.pipeline = pipeline;
 	mat.pipelineLayout = layout;
+	mat.constantSize = constantSize;
+	mat.constant = constantPtr;
 	_materials[name] = mat;
 	return &_materials[name];
 }
@@ -624,47 +635,18 @@ Mesh* VulkanEngine::get_mesh(const std::string& name)
 
 void VulkanEngine::init_scene()
 {
-  RenderObject monkey;
-	monkey.mesh = get_mesh("monkey");
-	monkey.material = get_material("dafaultmesh");
-	monkey.transformMatrix = glm::mat4{ 1.0f };
-
-	RenderObject map;
-	map.mesh = get_mesh("empire");
-	map.material = get_material("texturedmesh");
-	map.transformMatrix = glm::translate(glm::vec3{5,-10, 0});
-
-	// _renderables.push_back(map);
-	// // _renderables.push_back(monkey);
-	// VkSamplerCreateInfo samplerInfo = vkinit::sampler_create_info(VK_FILTER_NEAREST);
-
-	// VkSampler blockySampler;
-	// vkCreateSampler(_device, &samplerInfo, nullptr, &blockySampler);
-
-	// Material* texturedMat = get_material("texturedmesh");
-	// VkDescriptorSetAllocateInfo allocInfo = {};
-	// allocInfo.pNext = nullptr;
-	// allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	// allocInfo.descriptorPool = _descriptorPool;
-	// allocInfo.descriptorSetCount = 1;
-	// allocInfo.pSetLayouts = &_singleTextureSetLayout;
-	// vkAllocateDescriptorSets(_device, &allocInfo, &texturedMat->textureSet);
-
-	// VkDescriptorImageInfo imageBufferInfo;
-	// imageBufferInfo.sampler = blockySampler;
-	// imageBufferInfo.imageView = _loadedTextures["empire_diffuse"].imageView;
-	// imageBufferInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-	// VkWriteDescriptorSet texture1 = vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, texturedMat->textureSet, &imageBufferInfo, 0);
-
-	// vkUpdateDescriptorSets(_device, 1, &texture1, 0, nullptr);
-  // sort(_renderables.begin(), _renderables.end(), [](RenderObject& a, RenderObject& b){
-  //   if (a.material == b.material){
-  //     return a.mesh < b.mesh;
-  //   } else {
-  //     return a.material < b.material;
-  //   }
-  // });
+	RenderObject cloudCube;
+	cloudCube.mesh = get_mesh("cube_cloud");
+	cloudCube.material = get_material("cloudRenderPipe");
+	cloudCube.transformMatrix = glm::scale(glm::vec3{1.5,1.5,1.5});
+	_renderables.push_back(cloudCube);
+  sort(_renderables.begin(), _renderables.end(), [](RenderObject& a, RenderObject& b){
+    if (a.material == b.material){
+      return a.mesh < b.mesh;
+    } else {
+      return a.material < b.material;
+    }
+  });
 }
 
 void VulkanEngine::draw_objects(VkCommandBuffer cmd,RenderObject* first, int count)
@@ -697,25 +679,45 @@ void VulkanEngine::draw_objects(VkCommandBuffer cmd,RenderObject* first, int cou
 	vmaFlushAllocation(_allocator, _cameraBuffer._allocation, camOffset, sizeof(GPUCameraData));
 	vmaUnmapMemory(_allocator, _cameraBuffer._allocation);
 	
+	void* objectData;
+	vmaMapMemory(_allocator, get_current_frame().objectBuffer._allocation, &objectData);
+	GPUObjectData* objectSSBO = (GPUObjectData*)objectData;
+
 	Mesh* lastMesh = nullptr;
-	Material* particleMaterial = get_material("particleRenderPipe");
-	Material* fluidMaterial = get_material("fluidRenderPipe");
-	VkDeviceSize offsets[] = {0};
+	Material* lastMaterial = nullptr;
 	const uint32_t pDynamicOffsets[2] = {SceneOffset, camOffset};
 
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, fluidMaterial->pipeline);
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, fluidMaterial->pipelineLayout, 0, 1, &get_current_frame().globalDescriptor, 2, pDynamicOffsets);
+	for (int i = 0; i < count; i++)
+	{
+		RenderObject& object = first[i];
+		objectSSBO[i].modelMatrix = object.transformMatrix;
+		//only bind the pipeline if it doesn't match with the already bound one
+		if (object.material != lastMaterial) {
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipeline);
+			lastMaterial = object.material;
+			
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipelineLayout, 0, 1, &get_current_frame().globalDescriptor, 2, pDynamicOffsets);
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipelineLayout, 1, 1, &get_current_frame().objectDescriptor, 0, nullptr);
+			if (object.material->textureSet != VK_NULL_HANDLE){
+				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipelineLayout,2, 1, &object.material->textureSet, 0, nullptr);
+			}
+			if (object.material->constant != VK_NULL_HANDLE){
+				vkCmdPushConstants(cmd, object.material->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, object.material->constantSize, object.material->constant);
+			}
+		}
+		
 
-	// vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, particleMaterial->pipeline);
-	// vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, particleMaterial->pipelineLayout, 0, 1, &get_current_frame().globalDescriptor, 2, pDynamicOffsets);
+		if (object.mesh != lastMesh) {
+			VkDeviceSize offset = 0;
+			vkCmdBindVertexBuffers(cmd, 0, 1, &object.mesh->_vertexBuffer._buffer, &offset);
+			lastMesh = object.mesh;
+		}
+		//we can now draw
+		vkCmdDraw(cmd, object.mesh->_vertices.size(), 1, 0, i);
+	}
 
-	// vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, lastMaterial->pipelineLayout, 1, 1, &get_current_frame().particleDescriptor, 2, nullptr);
-
-	// MeshPushConstants constants;
-	// constants.render_matrix = glm::mat4(1.0f);
-	// vkCmdPushConstants(cmd, lastMaterial->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &constants);
-	// particleScene->draw(cmd);
-	fluidScene->draw(cmd);
+	vmaFlushAllocation(_allocator, get_current_frame().objectBuffer._allocation, 0, VK_WHOLE_SIZE);
+	vmaUnmapMemory(_allocator, get_current_frame().objectBuffer._allocation);
 }
 
 AllocatedBuffer VulkanEngine::create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
@@ -774,14 +776,14 @@ void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& f
 
 void VulkanEngine::load_images()
 {
-	Texture lostEmpire;
+	// Texture lostEmpire;
 
-	vkutil::load_image_from_file(*this, "./assets/lost_empire-RGBA.png", lostEmpire.image);
+	// vkutil::load_image_from_file(*this, "./assets/lost_empire-RGBA.png", lostEmpire.image);
 
-	VkImageViewCreateInfo imageinfo = vkinit::imageview_create_info(VK_FORMAT_R8G8B8A8_SRGB, lostEmpire.image._image, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkCreateImageView(_device, &imageinfo, nullptr, &lostEmpire.imageView);
+	// VkImageViewCreateInfo imageinfo = vkinit::imageview_create_info(VK_FORMAT_R8G8B8A8_SRGB, lostEmpire.image, VK_IMAGE_ASPECT_COLOR_BIT);
+	// vkCreateImageView(_device, &imageinfo, nullptr, &lostEmpire.imageView);
 
-	_loadedTextures["empire_diffuse"] = lostEmpire;
+	// _loadedTextures["empire_diffuse"] = lostEmpire;
 }
 
 void VulkanEngine::init_imgui()
@@ -877,7 +879,7 @@ AllocatedImage VulkanEngine::create_image(VkExtent3D size, VkFormat format, VkIm
 	}
 
 	// build a image-view for the image
-	VkImageViewCreateInfo view_info = vkinit::imageview_create_info(format, newImage._image, aspectFlag);
+	VkImageViewCreateInfo view_info = vkinit::imageview_create_info(format, newImage, aspectFlag);
 	view_info.subresourceRange.levelCount = img_info.mipLevels;
 
 	VK_CHECK(vkCreateImageView(_device, &view_info, nullptr, &newImage._imageView));

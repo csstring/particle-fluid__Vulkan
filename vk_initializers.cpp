@@ -77,7 +77,7 @@ VkPipelineRasterizationStateCreateInfo vkinit::rasterization_state_create_info(V
 	info.polygonMode = polygonMode;
 	info.lineWidth = 1.0f;
 	//no backface cull // fix backface culling
-	info.cullMode = VK_CULL_MODE_BACK_BIT;
+	info.cullMode = VK_CULL_MODE_NONE;
 	info.frontFace = VK_FRONT_FACE_CLOCKWISE;
 	//no depth bias
 	info.depthBiasEnable = VK_FALSE;
@@ -152,7 +152,7 @@ VkImageCreateInfo vkinit::image_create_info(VkFormat format, VkImageUsageFlags u
 	info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	info.pNext = nullptr;
 
-	info.imageType = VK_IMAGE_TYPE_2D;
+	info.imageType = extent.depth == 1 ? VK_IMAGE_TYPE_2D : VK_IMAGE_TYPE_3D;
 
 	info.format = format;
 	info.extent = extent;
@@ -166,15 +166,15 @@ VkImageCreateInfo vkinit::image_create_info(VkFormat format, VkImageUsageFlags u
 	return info;
 }
 
-VkImageViewCreateInfo vkinit::imageview_create_info(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags)
+VkImageViewCreateInfo vkinit::imageview_create_info(VkFormat format, AllocatedImage image, VkImageAspectFlags aspectFlags)
 {
 	//build a image-view for the depth image to use for rendering
 	VkImageViewCreateInfo info = {};
 	info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	info.pNext = nullptr;
 
-	info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	info.image = image;
+	info.viewType = image._imageExtent.depth == 1 ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_3D;
+	info.image = image._image;
 	info.format = format;
 	info.subresourceRange.baseMipLevel = 0;
 	info.subresourceRange.levelCount = 1;

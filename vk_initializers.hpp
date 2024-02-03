@@ -15,7 +15,7 @@ namespace vkinit {
   VkFenceCreateInfo fence_create_info(VkFenceCreateFlags flags = 0);
   VkSemaphoreCreateInfo semaphore_create_info(VkSemaphoreCreateFlags flags = 0);
   VkImageCreateInfo image_create_info(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent);
-  VkImageViewCreateInfo imageview_create_info(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags);
+  VkImageViewCreateInfo imageview_create_info(VkFormat format, AllocatedImage image, VkImageAspectFlags aspectFlags);
   VkPipelineDepthStencilStateCreateInfo depth_stencil_create_info(bool bDepthTest, bool bDepthWrite, VkCompareOp compareOp);
   VkDescriptorSetLayoutBinding descriptorset_layout_binding(VkDescriptorType type, VkShaderStageFlags stageFlags, uint32_t binding);
   VkWriteDescriptorSet write_descriptor_buffer(VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorBufferInfo* bufferInfo , uint32_t binding);

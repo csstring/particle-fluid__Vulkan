@@ -108,16 +108,20 @@ float worleyFbm(vec3 p, float freq)
         	 worleyNoise(p*freq*4., freq*4.) * .125;
 }
 
-layout(set = 0, binding = 0, r32f) uniform image3D density;
+layout(set = 0, binding = 0, rgba32f) uniform image3D density;
 
 layout(push_constant) uniform Params {
-  vec3 uvwOffset;
-  float lightAbsorptionCoeff;
-  vec3 lightDir;
-  float densityAbsorption;
-  vec3 lightColor;
-  float aniso;
+    vec4 cursorPos;
+    vec4 camPos;
+    vec4 uvwOffset;
+    vec4 lightDir;
+    vec4 lightColor;
+    float lightAbsorptionCoeff;
+    float densityAbsorption;
+    float aniso;
+    float dt;
 } params;
+
 
 float cloudDensity(vec3 uvw)
 {
@@ -147,7 +151,7 @@ void main()
 {
   ivec3 dtID = ivec3(gl_GlobalInvocationID.xyz);
   vec3 textureSize = imageSize(density);
-  vec3 uvw = vec3(dtID) / textureSize + params.uvwOffset; // ������ ������ ���� uvwOffset ���
+  vec3 uvw = vec3(dtID) / textureSize + params.uvwOffset.xyz; // ������ ������ ���� uvwOffset ���
 
   imageStore(density, dtID, vec4(cloudDensity(uvw),0.0f,0.0f,0.f));
 }

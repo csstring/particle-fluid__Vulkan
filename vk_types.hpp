@@ -65,6 +65,8 @@ struct VertexInputDescription {
 
 
 struct Material {
+	uint32_t constantSize{0};
+	void* constant{VK_NULL_HANDLE};
 	uint32_t setLayoutCount{0};
 	VkDescriptorSet textureSet{VK_NULL_HANDLE};
 	VkPipeline pipeline;
@@ -99,6 +101,9 @@ struct FrameData {
 	VkCommandBuffer _mainCommandBuffer;
 
 	VkDescriptorSet globalDescriptor;
+
+	AllocatedBuffer objectBuffer;
+	VkDescriptorSet objectDescriptor;
 };
 
 struct GPUSceneData {
@@ -133,6 +138,18 @@ struct FluidPushConstants {
 	glm::vec4 color;
 	glm::vec4 cursorPos;
 	float viscosity;
+	float dt;
+};
+
+struct alignas(16) CloudPushConstants {
+	glm::vec4 cursorPos;
+	glm::vec4 camPos;
+	glm::vec4 uvwOffset;
+  glm::vec4 lightDir;
+  glm::vec4 lightColor;
+  float lightAbsorptionCoeff;
+  float densityAbsorption;
+  float aniso;
 	float dt;
 };
 

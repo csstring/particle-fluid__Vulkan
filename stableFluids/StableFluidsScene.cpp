@@ -1,13 +1,9 @@
 #include "StableFluidsScene.hpp"
 #include "vk_initializers.hpp"
-#include <random>
+
 #include "vk_pipelines.hpp"
 #include "Camera.hpp"
 #include "vk_textures.hpp"
-
-uint32_t dispatchSize = 16;
-uint32_t imageWidth = 384*2;
-uint32_t imageHeight = 384*2;
 
 void StableFluidsScene::initialize(VulkanEngine* engine)
 {

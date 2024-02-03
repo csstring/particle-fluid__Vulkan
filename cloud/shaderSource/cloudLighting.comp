@@ -1,15 +1,18 @@
 #version 460
 
 layout(set = 0, binding = 0) uniform sampler3D densityTex;
-layout(set = 0, binding = 1, r32f) uniform image3D lightingTex;
+layout(set = 0, binding = 1, rgba32f) uniform image3D lightingTex;
 
 layout(push_constant) uniform Params {
-  vec3 uvwOffset;
-  float lightAbsorptionCoeff;
-  vec3 lightDir;
-  float densityAbsorption ;
-  vec3 lightColor;
-  float aniso;
+    vec4 cursorPos;
+    vec4 camPos;
+    vec4 uvwOffset;
+    vec4 lightDir;
+    vec4 lightColor;
+    float lightAbsorptionCoeff;
+    float densityAbsorption;
+    float aniso;
+    float dt;
 } params;
 
 float BeerLambert(float absorptionCoefficient, float distanceTraveled)
@@ -54,6 +57,6 @@ void main() {
     ivec3 dtID = ivec3(gl_GlobalInvocationID.xyz);
     vec3 uvw = (vec3(dtID) + 0.5) / vec3(size);
     
-    float alpha = LightRay((uvw - 0.5) * 2.0, params.lightDir);
+    float alpha = LightRay((uvw - 0.5) * 2.0, params.lightDir.xyz);
     imageStore(lightingTex, dtID, vec4(alpha,0,0,0));
 }

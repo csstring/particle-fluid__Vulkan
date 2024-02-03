@@ -39,6 +39,11 @@ class StableFluidsScene : public Scene
 
     FluidPushConstants constants;
 
+    uint32_t dispatchSize = 16;
+    uint32_t imageWidth = 384*2;
+    uint32_t imageHeight = 384*2;
+
+
     void sourcing();
     void vorticity();
     void diffuse();

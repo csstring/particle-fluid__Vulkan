@@ -17,5 +17,5 @@ layout(set = 0, binding = 0) uniform  CameraBuffer{
 void main()
 {
 	gl_Position = vec4(vPosition, 1.0f);
-    outUV = uv;
+  outUV = uv;
 }

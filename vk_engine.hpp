@@ -8,6 +8,7 @@
 constexpr unsigned int FRAME_OVERLAP = 2;
 class ParticleScene;
 class StableFluidsScene;
+class CloudScene;
 
 class VulkanEngine
 {
@@ -21,15 +22,14 @@ class VulkanEngine
     void init_pipelines();
     void init_scene();
     void load_meshes();
-	  void upload_mesh(Mesh& mesh);
     void draw_objects(VkCommandBuffer cmd,RenderObject* first, int count);
-    FrameData& get_current_frame(){return _frames[_frameNumber % FRAME_OVERLAP];}
     void init_descriptors();
     void init_imgui();
 
   private:  
     ParticleScene* particleScene;
     StableFluidsScene* fluidScene;
+    CloudScene* cloudScene;
 
   public :
     void init();
@@ -37,7 +37,13 @@ class VulkanEngine
     void draw();
     void run();
     void load_images();
-    Material* create_material(VkPipeline pipeline, VkPipelineLayout layout,const std::string& name, uint32_t layoutCount, VkDescriptorSet descriptorSet = VK_NULL_HANDLE);
+	  void upload_mesh(Mesh& mesh);
+    FrameData& get_current_frame(){return _frames[_frameNumber % FRAME_OVERLAP];}
+    Material* create_material(VkPipeline pipeline, VkPipelineLayout layout,
+    const std::string& name, 
+    uint32_t layoutCount = 0, VkDescriptorSet descriptorSet = VK_NULL_HANDLE,
+    uint32_t constantSize = 0, void* constantPtr = nullptr
+    );
     Material* get_material(const std::string& name);
     AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped);
     Mesh* get_mesh(const std::string& name);
@@ -74,8 +80,6 @@ class VulkanEngine
     VkRenderPass _renderPass;
 	  std::vector<VkFramebuffer> _framebuffers;
 
-	  Mesh _triangleMesh;
-    Mesh _monkeyMesh;
     int _selectedShader{ 0 };
 
     VkImageView _depthImageView;
@@ -87,6 +91,7 @@ class VulkanEngine
     std::unordered_map<std::string,Mesh> _meshes;
 
     VkDescriptorSetLayout _globalSetLayout;
+    VkDescriptorSetLayout _objectSetLayout;
     VkDescriptorSetLayout _singleTextureSetLayout;
     
     VkDescriptorPool _descriptorPool;
