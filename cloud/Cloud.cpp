@@ -460,6 +460,7 @@ void CloudScene::update(float dt, uint32_t frameidx)
 		constants.cursorPos.w = 1.0f;
 	}
 
+
 	// VK_CHECK(vkWaitForFences(_engine->_device, 1, &_computeContext._computeFence, true, 1000000000));
 	// VK_CHECK(vkResetFences(_engine->_device, 1, &_computeContext._computeFence));
 	// VK_CHECK(vkResetCommandBuffer(_computeContext._commandBuffer, 0));

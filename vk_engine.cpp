@@ -414,7 +414,7 @@ void VulkanEngine::run()
 
 		ImGui::End();
 		// particleScene->update(0, _frameNumber % 2);
-		// fluidScene->update(0, _frameNumber % 2);
+		fluidScene->update(0, _frameNumber % 2);
 		// cloudScene->update(1./120., _frameNumber % 2);
 		draw();
 	}
@@ -463,11 +463,10 @@ void VulkanEngine::draw()
 	//connect clear values
 	rpInfo.clearValueCount = 2;
 	rpInfo.pClearValues = clearValues;
-	cloudScene->update(1./120., _frameNumber % 2);
+	// cloudScene->update(1./120., _frameNumber % 2);
 	ImGui::Render();
 	vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-  draw_objects(cmd, _renderables.data(), _renderables.size());
+  draw_objects(cmd, _renderables.data(), 1);
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 
   vkCmdEndRenderPass(cmd);
@@ -686,35 +685,51 @@ void VulkanEngine::draw_objects(VkCommandBuffer cmd,RenderObject* first, int cou
 	Mesh* lastMesh = nullptr;
 	Material* lastMaterial = nullptr;
 	const uint32_t pDynamicOffsets[2] = {SceneOffset, camOffset};
+	Material* particleMaterial = get_material("particleRenderPipe");
+	Material* fluidMaterial = get_material("fluidRenderPipe");
+	VkDeviceSize offsets[] = {0};
 
-	for (int i = 0; i < count; i++)
-	{
-		RenderObject& object = first[i];
-		objectSSBO[i].modelMatrix = object.transformMatrix;
-		//only bind the pipeline if it doesn't match with the already bound one
-		if (object.material != lastMaterial) {
-			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipeline);
-			lastMaterial = object.material;
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, fluidMaterial->pipeline);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, fluidMaterial->pipelineLayout, 0, 1, &get_current_frame().globalDescriptor, 2, pDynamicOffsets);
+
+	// vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, particleMaterial->pipeline);
+	// vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, particleMaterial->pipelineLayout, 0, 1, &get_current_frame().globalDescriptor, 2, pDynamicOffsets);
+
+	// vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, lastMaterial->pipelineLayout, 1, 1, &get_current_frame().particleDescriptor, 2, nullptr);
+
+	// MeshPushConstants constants;
+	// constants.render_matrix = glm::mat4(1.0f);
+	// vkCmdPushConstants(cmd, lastMaterial->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPushConstants), &constants);
+	// particleScene->draw(cmd);
+	fluidScene->draw(cmd);
+	// for (int i = 0; i < count; i++)
+	// {
+	// 	RenderObject& object = first[i];
+	// 	objectSSBO[i].modelMatrix = object.transformMatrix;
+	// 	//only bind the pipeline if it doesn't match with the already bound one
+	// 	if (object.material != lastMaterial) {
+	// 		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipeline);
+	// 		lastMaterial = object.material;
 			
-			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipelineLayout, 0, 1, &get_current_frame().globalDescriptor, 2, pDynamicOffsets);
-			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipelineLayout, 1, 1, &get_current_frame().objectDescriptor, 0, nullptr);
-			if (object.material->textureSet != VK_NULL_HANDLE){
-				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipelineLayout,2, 1, &object.material->textureSet, 0, nullptr);
-			}
-			if (object.material->constant != VK_NULL_HANDLE){
-				vkCmdPushConstants(cmd, object.material->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, object.material->constantSize, object.material->constant);
-			}
-		}
+	// 		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipelineLayout, 0, 1, &get_current_frame().globalDescriptor, 2, pDynamicOffsets);
+	// 		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipelineLayout, 1, 1, &get_current_frame().objectDescriptor, 0, nullptr);
+	// 		if (object.material->textureSet != VK_NULL_HANDLE){
+	// 			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipelineLayout,2, 1, &object.material->textureSet, 0, nullptr);
+	// 		}
+	// 		if (object.material->constant != VK_NULL_HANDLE){
+	// 			vkCmdPushConstants(cmd, object.material->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, object.material->constantSize, object.material->constant);
+	// 		}
+	// 	}
 		
 
-		if (object.mesh != lastMesh) {
-			VkDeviceSize offset = 0;
-			vkCmdBindVertexBuffers(cmd, 0, 1, &object.mesh->_vertexBuffer._buffer, &offset);
-			lastMesh = object.mesh;
-		}
-		//we can now draw
-		vkCmdDraw(cmd, object.mesh->_vertices.size(), 1, 0, i);
-	}
+	// 	if (object.mesh != lastMesh) {
+	// 		VkDeviceSize offset = 0;
+	// 		vkCmdBindVertexBuffers(cmd, 0, 1, &object.mesh->_vertexBuffer._buffer, &offset);
+	// 		lastMesh = object.mesh;
+	// 	}
+	// 	//we can now draw
+	// 	vkCmdDraw(cmd, object.mesh->_vertices.size(), 1, 0, i);
+	// }
 
 	vmaFlushAllocation(_allocator, get_current_frame().objectBuffer._allocation, 0, VK_WHOLE_SIZE);
 	vmaUnmapMemory(_allocator, get_current_frame().objectBuffer._allocation);

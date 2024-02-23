@@ -198,21 +198,33 @@ void ParticleScene::init_compute_pipelines()
   });
 }
 
+float rand_lcg(uint *seed) {
+    const uint a = 1664525;
+    const uint c = 1013904223;
+    *seed = a * (*seed) + c;
+    return ((float)(*seed) / (float)UINT_MAX);
+}
+
 void ParticleScene::load_particle()
 {
 	std::vector<Particle> ps;
 	ps.resize(PARTICLE_COUNT);
 	std::default_random_engine rndEngine((unsigned)time(nullptr));
   std::uniform_real_distribution<float> rndDist(-1.0f, 1.0f);
+	std::random_device _rd;
+	uint32_t seed = _rd();
 
-	for (auto& vertex : ps) {
-	    float theta = rndDist(rndEngine) * 20.0f;
-			float theta1 = rndDist(rndEngine) * 20.0f;
-	    float x = theta;
-	    float y = theta1;
-	    vertex.position = glm::vec4(x, y, 0.0f, 0.0f);
-	    vertex.velocity = glm::normalize(vertex.position) * 0.00025f;
-	    vertex.color = glm::vec4(rndDist(rndEngine), rndDist(rndEngine), rndDist(rndEngine), 1.0f);
+	for (int i =0; i < ps.size(); ++i) {
+			uint32_t seedtmp = seed + i;
+			float theta = rand_lcg(&seed) * 2.0f * 3.141592f - 3.141592f;
+			float speedX = rand_lcg(&seed) * 4.0f - 2.0f;
+			float speedY = rand_lcg(&seed) * 4.0f - 2.0f;
+			float speedZ = rand_lcg(&seed) * 4.0f - 2.0f;
+
+			// Set particle position on the edge of a circle
+			ps[i].position = glm::vec4(cos(theta), -sin(theta), 0.0f, 1.0f);
+			ps[i].velocity = glm::vec4(speedX, speedY, speedZ, 0.0f);
+	    ps[i].color = glm::vec4(speedX, speedY, speedZ, 1.0f);
 	}
 
 	const size_t bufferSize = ps.size() * sizeof(Particle);

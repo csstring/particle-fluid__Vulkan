@@ -69,11 +69,11 @@ void main() {
         float lighting = 1.0; // Or sample lightingTex if needed이거 강의 봐봐야야함
         // float sdf1 = sdEllipsoid(posModel, vec3(0.8, .2, .2));
         // float sdf2 = sdTorus(posModel + vec3(0., 0.0,0.0), vec2(0.2, .7f));
-        float sdf = sdSphere(posModel, 0.5);
+        // float sdf = sdSphere(posModel, 0.5);
 
-        if (sdf > 0.0f){
-            density *= clamp(1.0-sdf*2.0f, 0.0,1.0f);
-        }
+        // if (sdf > 0.0f){
+        //     density *= clamp(1.0-sdf*2.0f, 0.0,1.0f);
+        // }
         if (density > 1e-3) {
             float prevAlpha = color.a;
             color.a *= BeerLambert(params.densityAbsorption * density, stepSize);

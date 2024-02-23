@@ -27,9 +27,9 @@ class CloudScene : public Scene
     void initMakeLightTexturePipelines();
 
     uint32_t dispatchSize = 4;
-    uint32_t imageWidth = 128;
-    uint32_t imageHeight = 128;
-    uint32_t imageDepth = 128;
+    uint32_t imageWidth = 32;
+    uint32_t imageHeight = 32;
+    uint32_t imageDepth = 32;
 
     glm::vec3 modelTrans;
   public:
